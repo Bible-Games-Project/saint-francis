@@ -74,3 +74,71 @@ the next sync; if a rule you are adding applies to every game, it belongs in
 bgp-admin at `templates/agent-docs/`, so ask before adding it.
 
 <!-- BGP-ADMIN:END -->
+
+## Stack
+
+Vite + TypeScript + `three` (WebGL), no UI framework. Plain DOM/CSS for menus
+(`src/ui/`), Three.js for the 3D scene (`src/scene/`). No React/Vue — keep it
+that way unless the maintainer asks for a framework; the UI is simple enough
+that plain DOM has been fine.
+
+Build/dev commands (bun, matches the CI workflow):
+
+```bash
+bun install
+bun run dev       # local dev server
+bun run build     # tsc -b && vite build -> dist/
+bun run preview   # serve the dist/ build
+```
+
+## Architecture
+
+- `src/scene/` — the 3D world. `SceneManager` owns the renderer/camera/render
+  loop and is scene-agnostic; `MainMenuScene.ts` composes environment +
+  character entities into it. Everything environmental
+  (`scene/environment/*`) and the character (`scene/character/SaintFrancis.ts`)
+  is procedural geometry (no model assets) — each factory returns a
+  `{ object, update? }` `SceneEntity`.
+- `src/ui/` — `UIManager` swaps the two full-screen base screens (`menu`,
+  `missions`); Settings is a separate always-mounted modal
+  (`ui/screens/SettingsUI.ts`), not part of the UIManager screen stack.
+- `src/data/missions.ts` — mission count is one constant (`TOTAL_MISSIONS`);
+  the array is generated from it, so adding/removing missions is a one-line
+  change. Real unlock/completion state lives in `SaveManager`, not here.
+- `src/data/languages.ts` + `src/i18n/` — 12 languages listed, only `en` has a
+  populated string table (`i18n/strings.en.ts`). Add a language by adding
+  `strings.<code>.ts` + one line in `i18n/i18n.ts`'s `TABLES`, then flip
+  `available: true` in `languages.ts`. Never hand-write fake translations.
+- `src/systems/SaveManager.ts` — localStorage-backed settings/progress,
+  `onChange` subscribers. `src/systems/AudioManager.ts` — no audio assets yet;
+  music/SFX are generated with the Web Audio API (oscillators), gated by the
+  same settings `SaveManager` persists. Swap in real audio files later by
+  changing only `AudioManager`, not the Settings UI.
+
+## Gotchas hit while building the menu
+
+- **`#ui-root > *` and pointer-events**: the base stylesheet forces
+  `pointer-events: auto` on every direct child of `#ui-root` (so the 3D canvas
+  underneath stays non-interactive by default). Because that's an ID
+  selector, it beats a plain class selector's `pointer-events: none` on the
+  same element — a hidden full-screen overlay (a modal backdrop, a hidden
+  `.ui-screen`) will silently eat clicks meant for whatever's visible under
+  it unless its own rule is written as `#ui-root > .the-class` to win on
+  specificity. Any new full-screen element mounted directly under `#ui-root`
+  needs this pattern.
+- **Circular "distant hill" meshes**: `Terrain.ts`'s hill silhouettes are full
+  `CircleGeometry` discs pushed back in -Z. If `radius >= distance`, the
+  disc's near rim wraps *forward* past the origin and buries foreground
+  objects (this happened to the character — looked like the ground had
+  swallowed everything below his neck). Keep `radius` well under `distance`
+  (comfortable margin, not just `<`).
+- Playwright's actionability check treats `aria-disabled="true"` as
+  non-clickable even without a real `disabled` attribute — expected, not a
+  bug, when testing the locked mission cards (they're intentionally still
+  real `<button>`s so a click can trigger the "locked" shake/toast). Use
+  `{ force: true }` in tests, don't add a real `disabled`.
+- No audio/3D-model assets are checked in; the whole scene and all SFX/music
+  are generated in code. If real Synty-style models or composed audio are
+  added later, wire them in behind the same `SceneEntity`/`AudioManager`
+  interfaces rather than reshaping the call sites.
+
