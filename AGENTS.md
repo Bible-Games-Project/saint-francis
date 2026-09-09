@@ -93,27 +93,142 @@ bun run preview   # serve the dist/ build
 
 ## Architecture
 
-- `src/scene/` — the 3D world. `SceneManager` owns the renderer/camera/render
-  loop and is scene-agnostic; `MainMenuScene.ts` composes environment +
+- `src/scene/` — the 3D **menu** world only. `SceneManager` owns the
+  renderer/camera/render loop and is scene-agnostic (its `.scene` field is
+  reassignable — see below); `MainMenuScene.ts` composes environment +
   character entities into it. Everything environmental
-  (`scene/environment/*`) and the character (`scene/character/SaintFrancis.ts`)
-  is procedural geometry (no model assets) — each factory returns a
-  `{ object, update? }` `SceneEntity`.
-- `src/ui/` — `UIManager` swaps the two full-screen base screens (`menu`,
-  `missions`); Settings is a separate always-mounted modal
-  (`ui/screens/SettingsUI.ts`), not part of the UIManager screen stack.
+  (`scene/environment/*`) is procedural geometry (no model assets) — each
+  factory returns a `{ object, update? }` `SceneEntity`.
+- `src/game/` — **gameplay** (missions), independent of the menu. See
+  "Mission architecture" below.
+- `src/scene/character/SaintFrancis.ts` — thin wrapper around
+  `game/character/HumanCharacter.ts`'s `createHuman()`, dressed as the
+  post-conversion friar (long habit, tonsure) for the menu backdrop. The
+  actual rig lives in `game/character/` because missions need it too
+  (player, NPCs); don't duplicate character-building code back into
+  `scene/`.
+- `src/ui/` — `UIManager` swaps three full-screen base screens (`menu`,
+  `missions`, `game`); Settings is a separate always-mounted modal
+  (`ui/screens/SettingsUI.ts`), not part of the UIManager screen stack. The
+  `game` screen's content is `game/hud/GameHud.ts`, created once in
+  `main.ts` and reused across mission attempts/replays.
 - `src/data/missions.ts` — mission count is one constant (`TOTAL_MISSIONS`);
   the array is generated from it, so adding/removing missions is a one-line
   change. Real unlock/completion state lives in `SaveManager`, not here.
+  `MissionSelectUI`'s `PLAYABLE_MISSION_INDICES` set is what actually routes
+  a card click to a real mission (`onPlayMission`) vs. the "coming soon"
+  toast — add a mission's index there once it has content.
 - `src/data/languages.ts` + `src/i18n/` — 12 languages listed, only `en` has a
   populated string table (`i18n/strings.en.ts`). Add a language by adding
   `strings.<code>.ts` + one line in `i18n/i18n.ts`'s `TABLES`, then flip
   `available: true` in `languages.ts`. Never hand-write fake translations.
 - `src/systems/SaveManager.ts` — localStorage-backed settings/progress,
-  `onChange` subscribers. `src/systems/AudioManager.ts` — no audio assets yet;
-  music/SFX are generated with the Web Audio API (oscillators), gated by the
-  same settings `SaveManager` persists. Swap in real audio files later by
+  `onChange` subscribers. `completeMission(id)` marks a mission done but
+  deliberately does **not** auto-unlock the next one — nothing past Mission
+  1 has content yet, so there's nothing to unlock into. When Mission 2
+  exists, decide unlock chaining explicitly rather than assuming it's
+  automatic. `src/systems/AudioManager.ts` — no audio assets yet; music/SFX
+  are generated with the Web Audio API (oscillators), gated by the same
+  settings `SaveManager` persists. Swap in real audio files later by
   changing only `AudioManager`, not the Settings UI.
+
+## Mission architecture (`src/game/`)
+
+Reusable, mission-agnostic systems — used by every mission, not just
+Mission 1:
+
+- `character/HumanCharacter.ts` — the one humanoid rig (`createHuman(opts)`),
+  parametric over garment length/color, headwear, beard, apron, build,
+  gender lean. Two-bone legs (hip+knee) and arms (shoulder+elbow) as real
+  `THREE.Group` pivots so a procedural walk cycle can drive them directly
+  (`rig.setMotion(speedFactor, running, airborne)` each frame, plus
+  `rig.playGesture("pickup"|"give"|"greet")` for one-shot layered
+  animations). `rig.leftHand` / `rig.rightHand` are real `Object3D`s —
+  attach carried props by `.add()`-ing onto them, don't track a separate
+  world-position copy.
+- `PlayerController.ts` — WASD/arrow movement relative to camera facing,
+  smooth third-person follow camera (mouse-drag horizontal orbit only, no
+  vertical), arcade jump, circle/box collision (`Collision.ts`) against
+  whatever the active sub-scene registers via `setColliders()`. Camera
+  distance/height are runtime-adjustable (`setCameraRig`) — missions use a
+  tighter rig indoors than outdoors (see gotcha below).
+- `interaction/InteractionSystem.ts` — proximity-based: register
+  `{ id, object, radius, label, onInteract }`, it finds the nearest enabled
+  one in range each frame for the HUD prompt, `interact()` fires it.
+- `dialogue/DialogueSystem.ts` + `hud/GameHud.ts` — a linear line queue with
+  no DOM of its own; `GameHud` renders it and owns the rest of the mission
+  chrome (objective pill, interact prompt, dialogue box, mission-complete
+  panel, exit button). `objectives/ObjectiveSystem.ts` is a one-line
+  pub/sub the HUD subscribes to.
+- `missions/mission1/` — everything specific to Mission 1:
+  `buildingParts.ts` (shared low-poly building/furniture kit — reused by
+  both `HouseScene.ts` and `StreetScene.ts`), `npcs.ts` (character presets:
+  Francis, Pietro, Pica, the customer, background villagers, the cloth
+  prop), and `Mission1.ts` which wires it all together (talk to father ->
+  pick up cloth -> open door -> walk the street -> deliver -> complete). A
+  future Mission 2 should follow the same shape as its own
+  `missions/mission2/` directory, reusing everything above.
+- The house interior and the street exterior are **two separate
+  `THREE.Scene` objects** built up front (`buildHouseScene` /
+  `buildStreetScene`), each with its own lighting/fog/background. Going
+  through the door swaps `manager.scene` and moves the player rig's
+  `Object3D` from one scene graph to the other — much simpler than trying
+  to keep one shared coordinate space or reusing one THREE.Scene for both.
+  Returning to Mission Select disposes the mission's updater and rebuilds
+  the main menu scene from scratch (`manager.scene = new THREE.Scene();
+  buildMainMenuScene(manager)`) rather than trying to keep it cached.
+
+## Gotchas hit building the gameplay mission
+
+- **`InteractionSystem` distance must be horizontal-only.** A prop placed at
+  table height (y≈0.8) or a door pivot at chest height reads as *further
+  away* than a same-radius ground-level NPC if you use full 3D
+  `Vector3.distanceTo` — the player's y is always ~0, so a raised object
+  gets an artificial distance penalty and can lose to a nearer-but-lower
+  interactable that shouldn't have won. Compare `hypot(dx, dz)` only.
+- **Follow-camera vs. small rooms.** A fixed "camera N units behind the
+  player" breaks the moment N is bigger than the clearance to whatever wall
+  is behind the player (very possible in a small interior right after
+  spawn) — the camera ends up outside the building looking at the back of a
+  wall, i.e. a black screen. Fixed by ray-marching the desired camera
+  offset against the same colliders the player uses
+  (`Collision.castClearDistance`) and pulling the camera in when it would
+  clip; `PlayerController.setCameraRig()` also lets each sub-scene use a
+  tighter distance/height indoors than outdoors. Also give the player some
+  spawn clearance from the wall behind them — don't spawn right against it.
+- **`[hidden]` loses to a same-specificity class rule that sets `display`.**
+  Several HUD elements (`.interact-prompt`, `.mission-complete-backdrop`)
+  declare `display: flex` directly on the class. The browser's UA rule
+  `[hidden]{display:none}` has the same specificity as a single class
+  selector, and author styles win ties — so `element.hidden = true` visibly
+  did nothing until each such rule got an explicit
+  `.the-class[hidden]{display:none}` override (same fix already in place
+  for `.dialogue-box`). Any new toggle-by-`hidden` element that also sets
+  its own `display` needs this pattern; elements that never set `display`
+  don't (`.objective-pill` is fine as-is).
+- **A focused button + Space is a hidden re-trigger.** Space doubles as
+  jump/dialogue-advance in gameplay. If the DOM element you just clicked
+  (e.g. the mission card that launched the mission) still has focus, the
+  browser's native "Space activates the focused button" behavior fires
+  *again* on the next Space press — observed as the mission silently
+  restarting from spawn mid-playthrough. Blur `document.activeElement` at
+  every major screen transition (`playMission`, `returnToMissionSelect`),
+  and blur inside a button's own click handler if it's likely to be
+  followed immediately by keyboard input (the HUD interact-prompt does
+  this).
+- Playwright's actionability check treats `aria-disabled="true"` as
+  non-clickable even without a real `disabled` attribute — expected, not a
+  bug, when testing the locked mission cards (they're intentionally still
+  real `<button>`s so a click can trigger the "locked" shake/toast). Use
+  `{ force: true }` in tests, don't add a real `disabled`.
+- For fast iteration on mission logic without fighting camera-relative
+  movement blind in a headless browser, it's much more reliable to
+  temporarily expose the mission's internal objects on `window` (controller,
+  interaction system, a `getState()` closure) from inside the mission file,
+  drive it via `page.evaluate` (`controller.teleport(x,z,yaw)`,
+  `interaction.interact()`, `hud.requestDialogueAdvance()`), then delete the
+  debug block before committing. Confirm removal didn't break anything with
+  one final real-click smoke test.
 
 ## Gotchas hit while building the menu
 

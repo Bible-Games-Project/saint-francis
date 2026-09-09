@@ -5,7 +5,7 @@ export interface Screen {
   destroy?(): void;
 }
 
-type BaseScreenName = "menu" | "missions";
+type BaseScreenName = "menu" | "missions" | "game";
 
 /**
  * Owns which base screen (main menu / mission select) is visible and

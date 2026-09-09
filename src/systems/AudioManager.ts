@@ -120,6 +120,15 @@ class AudioManagerImpl {
   playBack(): void {
     this.blip(440, 0.1, "sine");
   }
+
+  playPickup(): void {
+    this.blip(494, 0.07, "sine");
+    setTimeout(() => this.blip(659.25, 0.1, "sine"), 60);
+  }
+
+  playDoor(): void {
+    this.blip(220, 0.22, "triangle");
+  }
 }
 
 export const AudioManager = new AudioManagerImpl();

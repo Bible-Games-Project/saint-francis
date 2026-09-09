@@ -117,6 +117,11 @@ export const SaveManager = {
     data = { ...data, unlockedMissionIds: [...data.unlockedMissionIds, missionId] };
     persist();
   },
+  completeMission(missionId: string): void {
+    if (data.completedMissionIds.includes(missionId)) return;
+    data = { ...data, completedMissionIds: [...data.completedMissionIds, missionId] };
+    persist();
+  },
 
   deleteAllGameData(): void {
     try {

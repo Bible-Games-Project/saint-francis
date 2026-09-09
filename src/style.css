@@ -427,6 +427,27 @@ body {
   cursor: default;
 }
 
+.mission-card.completed {
+  background: linear-gradient(165deg, var(--color-cream), #cfe0bd);
+  border-color: rgba(127, 138, 92, 0.5);
+}
+
+.mission-check {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--color-olive-light), var(--color-olive));
+  color: var(--color-cream);
+  padding: 4px;
+}
+.mission-check svg { width: 100%; height: 100%; }
+
 .mission-number {
   font-family: var(--font-display);
   font-weight: 700;
@@ -784,4 +805,172 @@ body {
   .volume-row { grid-template-columns: 64px auto 1fr; gap: 10px; padding: 10px; }
   .missions-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
   .settings-tab { font-size: 0.68rem; padding: 10px 4px; letter-spacing: 0.01em; }
+}
+
+/* ---------------------------------------------------------------- */
+/* Gameplay HUD                                                      */
+/* ---------------------------------------------------------------- */
+
+.game-hud {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-topbar {
+  position: absolute;
+  top: clamp(14px, 3vh, 28px);
+  left: clamp(14px, 3vw, 28px);
+  right: clamp(14px, 3vw, 28px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.objective-pill {
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-panel-edge);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--color-ink);
+  animation: objective-in 380ms var(--ease-soft);
+}
+
+@keyframes objective-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.interact-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(120px, 20vh, 180px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px 10px 12px;
+  border: 1px solid var(--color-panel-edge);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+  animation: objective-in 220ms var(--ease-soft);
+  transition: transform 160ms var(--ease-soft);
+}
+.interact-prompt:hover {
+  transform: translateX(-50%) translateY(-2px);
+}
+.interact-prompt[hidden] {
+  display: none;
+}
+
+.interact-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--color-terracotta), var(--color-terracotta-dark));
+  color: var(--color-cream);
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dialogue-box {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(28px, 6vh, 56px);
+  transform: translate(-50%, 0);
+  width: min(92vw, 620px);
+  padding: 20px 26px;
+  cursor: pointer;
+  transition: opacity 260ms var(--ease-soft), transform 260ms var(--ease-soft);
+}
+.dialogue-box[hidden] {
+  display: none;
+}
+.dialogue-speaker {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-terracotta-dark);
+  margin-bottom: 6px;
+}
+.dialogue-text {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+.dialogue-continue {
+  position: absolute;
+  right: 18px;
+  bottom: 10px;
+  color: var(--color-ink-soft);
+  animation: dialogue-bounce 1.2s ease-in-out infinite;
+}
+@keyframes dialogue-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(4px); opacity: 1; }
+}
+
+.mission-complete-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 16, 10, 0.55);
+  opacity: 0;
+  transition: opacity 380ms var(--ease-soft);
+  padding: 20px;
+}
+.mission-complete-backdrop[hidden] {
+  display: none;
+}
+.mission-complete-backdrop.visible {
+  opacity: 1;
+}
+.mission-complete-panel {
+  width: min(92vw, 420px);
+  padding: 34px 30px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transform: scale(0.92);
+  transition: transform 380ms var(--ease-soft);
+}
+.mission-complete-backdrop.visible .mission-complete-panel {
+  transform: scale(1);
+}
+.mission-complete-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.7rem;
+  color: var(--color-ink);
+}
+.mission-complete-subtitle {
+  font-size: 0.95rem;
+  color: var(--color-ink-soft);
+  line-height: 1.5;
+}
+.mission-complete-btn {
+  margin-top: 6px;
+}
+
+@media (max-width: 480px) {
+  .dialogue-box { padding: 16px 18px; }
+  .objective-pill { font-size: 0.72rem; padding: 8px 16px; }
+  .interact-prompt { font-size: 0.8rem; }
 }
